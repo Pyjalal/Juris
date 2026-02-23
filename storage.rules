@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ---------------------------------------------------------------
+    // documents/{uid}/** -- tenant document uploads
+    //
+    // - Authenticated users can read and write only within their own
+    //   UID-namespaced folder.
+    // - Uploads are capped at 10 MB.
+    // - Only image content types are accepted (JPEG, PNG, WebP, HEIC).
+    // ---------------------------------------------------------------
+    match /documents/{uid}/{allPaths=**} {
+
+      // Read: owner only
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Write: owner only, with size and type constraints
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|png|webp|heic)');
+    }
+
+    // ---------------------------------------------------------------
+    // Default: deny all unmatched paths
+    // ---------------------------------------------------------------
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

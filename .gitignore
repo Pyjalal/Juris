@@ -1,0 +1,135 @@
+# ==============================================================================
+# Juris .gitignore
+# Flutter + Firebase + Node.js (Cloud Functions) + Google Cloud
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Flutter / Dart
+# ------------------------------------------------------------------------------
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+*.dart.js
+*.dart.js.deps
+*.dart.js.map
+*.dart.precompiled.js
+*.js_
+*.js.deps
+*.js.map
+
+# Flutter-specific
+.flutter-plugins
+.flutter-plugins-dependencies
+**/ios/Flutter/.last_build_id
+**/ios/Pods/
+**/ios/.symlinks/
+**/android/.gradle/
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/GeneratedPluginRegistrant.kt
+
+# ------------------------------------------------------------------------------
+# Node.js / Cloud Functions
+# ------------------------------------------------------------------------------
+node_modules/
+functions/node_modules/
+functions/lib/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# ------------------------------------------------------------------------------
+# Environment variables and secrets
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.production
+.env.staging
+functions/.env
+functions/.env.local
+functions/.env.production
+
+# Service account keys -- NEVER commit these
+*-service-account.json
+*-credentials.json
+service-account*.json
+credentials*.json
+*.p12
+*.key
+
+# Google Cloud KMS keys
+*.pem
+
+# ------------------------------------------------------------------------------
+# Firebase
+# ------------------------------------------------------------------------------
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+.firebaserc.backup
+
+# Firebase emulator data
+emulator-data/
+
+# ------------------------------------------------------------------------------
+# Law corpus PDFs (too large for git)
+# ------------------------------------------------------------------------------
+*.pdf
+
+# ------------------------------------------------------------------------------
+# IDE and editor files
+# ------------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# ------------------------------------------------------------------------------
+# Build and temporary files
+# ------------------------------------------------------------------------------
+dist/
+out/
+tmp/
+temp/
+*.log
+*.tmp
+*.bak
+*.cache
+coverage/
+.nyc_output/
+
+# ------------------------------------------------------------------------------
+# Miscellaneous
+# ------------------------------------------------------------------------------
+.claude/
