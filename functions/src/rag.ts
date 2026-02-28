@@ -9,18 +9,23 @@ import { VertexAI } from '@google-cloud/vertexai';
 import { v1 } from '@google-cloud/aiplatform';
 import * as admin from 'firebase-admin';
 
-const PROJECT_ID = process.env.GCLOUD_PROJECT || 'juris-kitahack';
-const LOCATION = 'asia-southeast1';
-const INDEX_ENDPOINT_ID = process.env.VECTOR_SEARCH_ENDPOINT || '';
-const DEPLOYED_INDEX_ID = process.env.DEPLOYED_INDEX_ID || '';
+const PROJECT_ID = process.env.GCLOUD_PROJECT || 'juris-74a5d';
+const LOCATION = 'asia-southeast1'; // Consolidated to single region
+const INDEX_ENDPOINT_ID = process.env.VECTOR_SEARCH_ENDPOINT || '5253352208304439296';
+const DEPLOYED_INDEX_ID = process.env.DEPLOYED_INDEX_ID || 'juris_law_chunks_deployed';
 const EMBEDDING_MODEL = 'text-embedding-004';
 
-// Vertex AI client for embeddings
+// Vertex AI client for embeddings (same region as function)
 const vertexAI = new VertexAI({ project: PROJECT_ID, location: LOCATION });
 
-// Firestore reference for law chunks metadata
-const db = admin.firestore();
-const lawChunksRef = db.collection('law_chunks');
+// Firestore reference getter (lazy initialization)
+function getDb() {
+  return admin.firestore();
+}
+
+function getLawChunksRef() {
+  return getDb().collection('law_chunks');
+}
 
 // === TYPES ===
 
@@ -140,7 +145,7 @@ export async function queryVectorSearch(
   // Step 4: Fetch full law chunk metadata from Firestore
   const chunks: LawChunk[] = [];
   for (const result of results) {
-    const doc = await lawChunksRef.doc(result.id).get();
+    const doc = await getLawChunksRef().doc(result.id).get();
     if (doc.exists) {
       chunks.push({ id: doc.id, ...doc.data() } as LawChunk);
     }

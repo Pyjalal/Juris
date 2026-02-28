@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class DocumentModel {
   final String id;
   final String uid;
-  final String? imageUrl;
+  final List<String> imageUrls;
   final String? ocrText;
   final double? ocrConfidence;
   final String? ocrLanguage;
@@ -18,8 +18,8 @@ class DocumentModel {
   DocumentModel({
     required this.id,
     required this.uid,
-    this.imageUrl,
-    this.ocrText,
+    this.imageUrls = const [],
+    this.ocrText;
     this.ocrConfidence,
     this.ocrLanguage,
     this.ocrClauses,
@@ -56,7 +56,7 @@ class DocumentModel {
     return DocumentModel(
       id: doc.id,
       uid: data['uid'] ?? '',
-      imageUrl: data['image_url'],
+      imageUrls: List<String>.from(data['image_urls'] ?? []),
       ocrText: data['ocr_text'],
       ocrConfidence: (data['ocr_confidence'] as num?)?.toDouble(),
       ocrLanguage: data['ocr_language'],
@@ -75,7 +75,7 @@ class DocumentModel {
   Map<String, dynamic> toFirestore() {
     return {
       'uid': uid,
-      if (imageUrl != null) 'image_url': imageUrl,
+      if (imageUrls.isNotEmpty) 'image_urls': imageUrls,
       'status': status,
       'created_at': FieldValue.serverTimestamp(),
       'updated_at': FieldValue.serverTimestamp(),

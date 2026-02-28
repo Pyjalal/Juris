@@ -16,11 +16,11 @@ import * as path from 'path';
 
 // Initialize Firebase Admin (uses Application Default Credentials)
 admin.initializeApp({
-  projectId: process.env.GCLOUD_PROJECT || 'juris-kitahack',
+  projectId: process.env.GCLOUD_PROJECT || 'juris-74a5d',
 });
 
 const db = admin.firestore();
-const PROJECT_ID = process.env.GCLOUD_PROJECT || 'juris-kitahack';
+const PROJECT_ID = process.env.GCLOUD_PROJECT || 'juris-74a5d';
 const LOCATION = 'asia-southeast1';
 const EMBEDDING_MODEL = 'text-embedding-004';
 

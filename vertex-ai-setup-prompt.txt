@@ -1,0 +1,84 @@
+I need extremely detailed, step-by-step instructions to enable Vertex AI Generative AI (specifically Gemini models) in Google Cloud Console for my Firebase project. I'm stuck and need your help to guide me through the exact Console UI.
+
+## My Project Details
+- **Project ID:** juris-74a5d
+- **Project Number:** 364056284432
+- **Current Status:** Getting 404 error when trying to use Gemini models
+- **Error Message:** "Publisher Model `projects/juris-74a5d/locations/us-central1/publishers/google/models/gemini-pro` was not found or your project does not have access to it"
+- **Billing:** Already enabled and linked
+- **APIs Already Enabled:**
+  - aiplatform.googleapis.com
+  - generativelanguage.googleapis.com
+- **IAM Roles:** roles/aiplatform.user granted to juris-74a5d@appspot.gserviceaccount.com
+- **Region:** us-central1 (required for Gemini models)
+- **SDK:** Using @google-cloud/vertexai v1.9.0 in Firebase Cloud Functions
+
+## What I Need From You
+
+Please provide **EXACT** step-by-step instructions with:
+
+1. **Precise Console URLs** - Give me the FULL URLs with my project ID (juris-74a5d) already filled in. Don't give me generic URLs like "console.cloud.google.com/vertex-ai" - give me the actual URL that will take me directly to the right page for MY project.
+
+2. **Exact UI Elements** - Tell me EXACTLY what text I should see on buttons, what menu items to click, what banners or notifications might appear. For example:
+   - "You should see a blue button that says 'Enable Vertex AI API'"
+   - "Look for a banner at the top that says 'Activate Generative AI on Vertex AI'"
+   - "In the left sidebar, click on the menu item labeled 'Model Garden'"
+
+3. **Screenshots or Visual Descriptions** - If possible, describe what the page should look like:
+   - "The page will have a purple header with 'Vertex AI Studio' written in white text"
+   - "You'll see a grid of model cards, each showing a model name and 'Enable' button"
+   - "There should be a section titled 'Foundation Models' with Gemini listed"
+
+4. **What I'm Currently Seeing vs. What I Should See:**
+   - When I visit Vertex AI URLs, I only see "Get API Key" options
+   - I do NOT see any "Enable", "Activate", or "Get Started" options for Generative AI
+   - Please explain what the difference means and how to fix it
+
+5. **Alternative Paths** - If the primary method doesn't work, give me 2-3 backup approaches:
+   - "If you don't see the Enable button, try Method B..."
+   - "Some users need to accept Terms of Service first by visiting..."
+   - "If your project is a Firebase project, you might need to..."
+
+6. **Verification Steps** - After I follow your instructions, how do I VERIFY that Vertex AI Generative AI is actually enabled?
+   - What should I be able to do?
+   - What API call can I test?
+   - What should appear in the Console?
+
+7. **Common Issues for Firebase Projects** - My project is a Firebase project (juris-74a5d). Are there any special considerations or additional steps needed?
+
+8. **Terms of Service / Billing Prompts** - If any ToS acceptance or billing confirmation dialogs appear, tell me:
+   - What they'll say
+   - What I should click
+   - Whether this is normal
+
+9. **Troubleshooting** - If after following all steps I still see "get api key" instead of enable options, what should I do?
+   - Is there a support form I can fill out?
+   - Is there a specific Google support article?
+   - Could my project be in a restricted state?
+
+## Time Constraint
+I have less than 48 hours until my hackathon deadline. I need this working ASAP. Please prioritize solutions that work immediately over explanations of why things might be broken.
+
+## What I've Already Tried (all failed)
+1. ✗ Enabled aiplatform.googleapis.com
+2. ✗ Enabled generativelanguage.googleapis.com
+3. ✗ Changed regions multiple times
+4. ✗ Tried different model versions (gemini-1.5-pro, gemini-1.5-pro-002, gemini-pro)
+5. ✗ Switched from REST API to official SDK
+6. ✗ Granted IAM roles to service account
+7. ✗ Visited multiple Console URLs - all show "get api key" not "enable"
+
+## Example of What I Need
+
+**GOOD ANSWER:**
+"Visit https://console.cloud.google.com/vertex-ai/generative/language?project=juris-74a5d
+You should see a page titled 'Language' with a purple banner at the top.
+Look for a button labeled 'Enable Generative AI on Vertex AI' - it will be blue and located in the top-right corner.
+Click it, then accept the Terms of Service that appears in a modal dialog.
+After clicking 'I Agree', you should see a green checkmark and the page will reload showing a list of available models including gemini-1.5-pro."
+
+**BAD ANSWER:**
+"You need to enable Vertex AI in the Console."
+(This is too vague - WHERE in Console? WHAT button? WHAT will I see?)
+
+Please help me with the most detailed, explicit instructions possible. Assume I'm confused by the Google Cloud Console UI and need hand-holding through every click.

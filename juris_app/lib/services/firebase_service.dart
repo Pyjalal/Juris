@@ -33,11 +33,12 @@ class FirebaseService {
   Future<String> uploadDocumentImage({
     required String docId,
     required File imageFile,
+    required int index,
   }) async {
     final userId = uid;
     if (userId == null) throw Exception('Not authenticated');
 
-    final ref = _storage.ref().child('documents/$userId/$docId/image.jpg');
+    final ref = _storage.ref().child('documents/$userId/$docId/image_$index.jpg');
     await ref.putFile(
       imageFile,
       SettableMetadata(contentType: 'image/jpeg'),
@@ -49,14 +50,14 @@ class FirebaseService {
 
   Future<void> createDocument({
     required String docId,
-    required String imageUrl,
+    required List<String> imageUrls,
   }) async {
     final userId = uid;
     if (userId == null) throw Exception('Not authenticated');
 
     await _firestore.collection('documents').doc(docId).set({
       'uid': userId,
-      'image_url': imageUrl,
+      'image_urls': imageUrls,
       'status': 'pending',
       'created_at': FieldValue.serverTimestamp(),
       'updated_at': FieldValue.serverTimestamp(),

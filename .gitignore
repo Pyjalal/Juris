@@ -133,3 +133,7 @@ coverage/
 # Miscellaneous
 # ------------------------------------------------------------------------------
 .claude/
+DEPLOYMENT_CHECKLIST.md
+docs/PITCH_SCRIPT.md
+docs/demo-video
+docs/TESTING_GUIDE.md

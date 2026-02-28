@@ -9,7 +9,6 @@
 
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
-import { VertexAI } from '@google-cloud/vertexai';
 import { Storage } from '@google-cloud/storage';
 
 import {
@@ -20,66 +19,76 @@ import {
   LOD_SYSTEM_PROMPT,
   SIMPLIFICATION_SYSTEM_PROMPT,
 } from './prompts';
-import { retrieveLegalContext } from './rag';
+import { retrieveLegalContext } from './rag-simple';
 import {
   validateStatuteCitations,
   handleOCRConfidence,
   sanitizeForLogging,
 } from './validators';
+import {
+  generateJSONWithImages,
+  generateJSON,
+} from './gemini-simple';
 
 admin.initializeApp();
 
 const db = admin.firestore();
 const storage = new Storage();
 
-const PROJECT_ID = process.env.GCLOUD_PROJECT || 'juris-kitahack';
+const PROJECT_ID = process.env.GCLOUD_PROJECT || 'juris-74a5d';
 const LOCATION = 'asia-southeast1';
-
-// Initialize Vertex AI
-const vertexAI = new VertexAI({ project: PROJECT_ID, location: LOCATION });
 
 // === PROCESS DOCUMENT (Storage Trigger) ===
 
 export const processDocument = functions
   .region(LOCATION)
-  .storage.object()
-  .onFinalize(async (object) => {
-    const filePath = object.name;
-    const contentType = object.contentType;
+  .runWith({ memory: '1GB', timeoutSeconds: 540 })
+  .firestore.document('documents/{docId}')
+  .onCreate(async (snap, context) => {
+    const docId = context.params.docId;
+    const data = snap.data();
+    const uid = data.uid;
+    const imageUrls: string[] = data.image_urls || [];
 
-    // Only process images in the documents/ folder
-    if (!filePath?.startsWith('documents/') || !contentType?.startsWith('image/')) {
-      functions.logger.info('Skipping non-document file', { filePath });
+    if (!imageUrls || imageUrls.length === 0) {
+      functions.logger.info('Skipping document without images', { docId });
       return;
     }
 
-    // Extract doc_id from path: documents/{uid}/{doc_id}/image.jpg
-    const pathParts = filePath.split('/');
-    if (pathParts.length < 4) {
-      functions.logger.error('Invalid file path structure', { filePath });
-      return;
-    }
-    const uid = pathParts[1];
-    const docId = pathParts[2];
-
-    functions.logger.info('Processing document', sanitizeForLogging({ docId, uid }));
+    functions.logger.info('Processing document', sanitizeForLogging({ docId, uid, imageCount: imageUrls.length }));
 
     try {
       // Update status to processing
-      await db.collection('documents').doc(docId).update({
+      await snap.ref.update({
         status: 'processing',
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // === STEP 1: Download image from GCS ===
-      const bucket = storage.bucket(object.bucket);
-      const file = bucket.file(filePath);
-      const [imageBuffer] = await file.download();
-      const base64Image = imageBuffer.toString('base64');
-      const mimeType = contentType as string;
+      // === STEP 1: Download all images from GCS ===
+      const bucket = storage.bucket(`${PROJECT_ID}.firebasestorage.app`);
+      const images: Array<{ data: string; mimeType: string }> = [];
+
+      for (const gsUrl of imageUrls) {
+        // Parse gs:// url or storage path
+        let filePath = gsUrl;
+        if (gsUrl.startsWith('gs://')) {
+          filePath = gsUrl.split('/').slice(3).join('/');
+        } else if (gsUrl.includes('.appspot.com/o/')) {
+          filePath = decodeURIComponent(gsUrl.split('.appspot.com/o/')[1].split('?')[0]);
+        }
+
+        const file = bucket.file(filePath);
+        const [metadata] = await file.getMetadata();
+        const mimeType = metadata.contentType || 'image/jpeg';
+
+        const [imageBuffer] = await file.download();
+        const base64Image = imageBuffer.toString('base64');
+
+        images.push({ data: base64Image, mimeType });
+      }
 
       // === STEP 2: OCR via Gemini Vision ===
-      const ocrResult = await performOCR(base64Image, mimeType);
+      const ocrResult = await performOCR(images);
 
       // === STEP 3: Check OCR confidence ===
       const confidenceHandler = handleOCRConfidence(ocrResult.extraction_confidence);
@@ -150,11 +159,11 @@ export const processDocument = functions
       });
 
       // === STEP 8: Update document status to completed ===
-      await db.collection('documents').doc(docId).update({
+      await db.collection('documents').doc(docId).set({
         status: 'completed',
         audit_id: auditRef.id,
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      }, { merge: true });
 
       functions.logger.info('Document processing complete', {
         docId,
@@ -166,13 +175,14 @@ export const processDocument = functions
       functions.logger.error('Document processing failed', {
         docId,
         error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
       });
 
-      await db.collection('documents').doc(docId).update({
+      await db.collection('documents').doc(docId).set({
         status: 'failed',
         error_message: 'An error occurred while processing your document. Please try again.',
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      }, { merge: true });
     }
   });
 
@@ -180,6 +190,7 @@ export const processDocument = functions
 
 export const generateLOD = functions
   .region(LOCATION)
+  .runWith({ memory: '512MB', timeoutSeconds: 300 })
   .https.onCall(async (data, context) => {
     // Verify authentication
     if (!context.auth) {
@@ -216,16 +227,6 @@ export const generateLOD = functions
     }
 
     // Generate LOD via Gemini
-    const model = vertexAI.getGenerativeModel({
-      model: 'gemini-1.5-pro',
-      systemInstruction: { role: 'system', parts: [{ text: LOD_SYSTEM_PROMPT }] },
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.3,
-        maxOutputTokens: 4096,
-      },
-    });
-
     const today = new Date().toLocaleDateString('en-MY', {
       day: 'numeric',
       month: 'long',
@@ -250,34 +251,43 @@ TODAY'S DATE: ${today}
 
 Generate the Letter of Demand following the system instructions exactly. Return only valid JSON.`;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    try {
+      const lodData = await generateJSON<{
+        letter_content: string;
+        word_count: number;
+        clauses_addressed: number;
+        escalation_options: string[];
+      }>(prompt, LOD_SYSTEM_PROMPT, {
+        temperature: 0.3,
+        maxOutputTokens: 4096,
+      });
 
-    if (!responseText) {
+      // Save LOD to Firestore
+      const lodRef = db.collection('letters_of_demand').doc();
+      await lodRef.set({
+        audit_id,
+        uid: context.auth.uid,
+        letter_content: lodData.letter_content,
+        word_count: lodData.word_count,
+        clauses_addressed: lodData.clauses_addressed,
+        escalation_options: lodData.escalation_options,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return { lod_id: lodRef.id, ...lodData };
+    } catch (error) {
+      functions.logger.error('LOD generation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       throw new functions.https.HttpsError('internal', 'Failed to generate Letter of Demand.');
     }
-
-    const lodData = JSON.parse(responseText);
-
-    // Save LOD to Firestore
-    const lodRef = db.collection('letters_of_demand').doc();
-    await lodRef.set({
-      audit_id,
-      uid: context.auth.uid,
-      letter_content: lodData.letter_content,
-      word_count: lodData.word_count,
-      clauses_addressed: lodData.clauses_addressed,
-      escalation_options: lodData.escalation_options,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    return { lod_id: lodRef.id, ...lodData };
   });
 
 // === SIMPLIFY CLAUSE (HTTPS Callable) ===
 
 export const simplifyClause = functions
   .region(LOCATION)
+  .runWith({ memory: '512MB', timeoutSeconds: 120 })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'Must be logged in.');
@@ -292,16 +302,6 @@ export const simplifyClause = functions
       );
     }
 
-    const model = vertexAI.getGenerativeModel({
-      model: 'gemini-1.5-pro',
-      systemInstruction: { role: 'system', parts: [{ text: SIMPLIFICATION_SYSTEM_PROMPT }] },
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.4,
-        maxOutputTokens: 1024,
-      },
-    });
-
     let prompt = `Simplify the following tenancy agreement clause for a Malaysian tenant:
 
 CLAUSE TEXT:
@@ -315,21 +315,29 @@ TARGET LANGUAGE: ${target_language || 'en'}`;
 
     prompt += '\n\nReturn only valid JSON following the system instructions.';
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    try {
+      const result = await generateJSON<{
+        simplified_text: string;
+        key_terms: string[];
+        plain_language_summary: string;
+      }>(prompt, SIMPLIFICATION_SYSTEM_PROMPT, {
+        temperature: 0.4,
+        maxOutputTokens: 1024,
+      });
 
-    if (!responseText) {
+      return result;
+    } catch (error) {
+      functions.logger.error('Clause simplification failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       throw new functions.https.HttpsError('internal', 'Failed to simplify clause.');
     }
-
-    return JSON.parse(responseText);
   });
 
 // === HELPER FUNCTIONS ===
 
 async function performOCR(
-  base64Image: string,
-  mimeType: string
+  images: Array<{ data: string; mimeType: string }>
 ): Promise<{
   extraction_confidence: number;
   language_detected: string;
@@ -343,39 +351,15 @@ async function performOCR(
   full_text: string;
   notes: string;
 }> {
-  const model = vertexAI.getGenerativeModel({
-    model: 'gemini-1.5-pro',
-    systemInstruction: { role: 'system', parts: [{ text: OCR_SYSTEM_PROMPT }] },
-    generationConfig: {
-      responseMimeType: 'application/json',
+  return generateJSONWithImages(
+    images,
+    OCR_USER_PROMPT,
+    OCR_SYSTEM_PROMPT,
+    {
       temperature: 0.1,
       maxOutputTokens: 8192,
-    },
-  });
-
-  const result = await model.generateContent({
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          {
-            inlineData: {
-              mimeType,
-              data: base64Image,
-            },
-          },
-          { text: OCR_USER_PROMPT },
-        ],
-      },
-    ],
-  });
-
-  const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!responseText) {
-    throw new Error('OCR returned empty response');
-  }
-
-  return JSON.parse(responseText);
+    }
+  );
 }
 
 async function performComplianceAnalysis(
@@ -397,23 +381,10 @@ async function performComplianceAnalysis(
   actionable_next_step: string;
   analysis_notes: string;
 }> {
-  const model = vertexAI.getGenerativeModel({
-    model: 'gemini-1.5-pro',
-    systemInstruction: { role: 'system', parts: [{ text: COMPLIANCE_SYSTEM_PROMPT }] },
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.2,
-      maxOutputTokens: 8192,
-    },
-  });
-
   const userPrompt = buildComplianceUserPrompt(ragContext, ocrText);
-  const result = await model.generateContent(userPrompt);
-  const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text;
 
-  if (!responseText) {
-    throw new Error('Compliance analysis returned empty response');
-  }
-
-  return JSON.parse(responseText);
+  return generateJSON(userPrompt, COMPLIANCE_SYSTEM_PROMPT, {
+    temperature: 0.2,
+    maxOutputTokens: 8192,
+  });
 }

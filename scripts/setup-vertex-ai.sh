@@ -12,7 +12,7 @@
 # Prerequisites:
 #   - gcloud CLI authenticated with a project-owner or editor role
 #   - The embedding JSONL file has already been generated and is available
-#     at gs://juris-kitahack-vectors/embeddings/law_chunks.json
+#     at gs://juris-74a5d-vectors/embeddings/law_chunks.json
 #
 # Usage:
 #   chmod +x scripts/setup-vertex-ai.sh
@@ -24,9 +24,10 @@ set -euo pipefail
 
 # ---- Configuration ---------------------------------------------------
 
-PROJECT_ID="juris-kitahack"
+PROJECT_ID="juris-74a5d"
+PROJECT_NAME="juris"
 REGION="asia-southeast1"
-BUCKET_NAME="juris-kitahack-vectors"
+BUCKET_NAME="${PROJECT_ID}-vectors"
 INDEX_DISPLAY_NAME="juris-law-chunks-index"
 ENDPOINT_DISPLAY_NAME="juris-law-chunks-endpoint"
 EMBEDDINGS_GCS_URI="gs://${BUCKET_NAME}/embeddings"
@@ -46,13 +47,58 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 # ---- Pre-flight checks -----------------------------------------------
 
 info "Verifying gcloud CLI is installed and authenticated..."
-command -v gcloud >/dev/null 2>&1 || error "gcloud CLI is not installed. See https://cloud.google.com/sdk/docs/install"
+
+# Git Bash on Windows may not inherit Cloud SDK PATH correctly.
+# Try common install locations before failing.
+if ! command -v gcloud >/dev/null 2>&1 && ! command -v gcloud.cmd >/dev/null 2>&1; then
+  WINDOWS_USER="${USERNAME:-${USER:-}}"
+  CANDIDATE_CLOUDSDK_PATHS=(
+    "/c/Program Files/Google/Cloud SDK/google-cloud-sdk/bin"
+    "/c/Program Files (x86)/Google/Cloud SDK/google-cloud-sdk/bin"
+    "/c/Users/${WINDOWS_USER}/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin"
+  )
+
+  for candidate in "${CANDIDATE_CLOUDSDK_PATHS[@]}"; do
+    if [[ -d "${candidate}" ]]; then
+      export PATH="${PATH}:${candidate}"
+    fi
+  done
+fi
+
+command -v gcloud >/dev/null 2>&1 || command -v gcloud.cmd >/dev/null 2>&1 || error "gcloud CLI is not installed or not on PATH for this Bash session. See https://cloud.google.com/sdk/docs/install"
+command -v gsutil >/dev/null 2>&1 || command -v gsutil.cmd >/dev/null 2>&1 || error "gsutil is not installed or not on PATH for this Bash session. Install Google Cloud SDK and restart terminal."
+
+# Prefer Windows .cmd shims in Git Bash to stay consistent with the
+# authenticated Cloud SDK profile used in cmd/PowerShell.
+if command -v gcloud.cmd >/dev/null 2>&1; then
+  gcloud() { gcloud.cmd "$@"; }
+fi
+
+if command -v gsutil.cmd >/dev/null 2>&1; then
+  gsutil() { gsutil.cmd "$@"; }
+fi
+
+ACTIVE_ACCOUNT=$(gcloud config get-value account 2>/dev/null || true)
+if [[ -z "${ACTIVE_ACCOUNT}" || "${ACTIVE_ACCOUNT}" == "(unset)" ]]; then
+  FIRST_AUTH_ACCOUNT=$(gcloud auth list --format="value(account)" 2>/dev/null | tr -d '\r' | head -n 1 || true)
+  if [[ -n "${FIRST_AUTH_ACCOUNT}" ]]; then
+    warn "No active gcloud account set. Using '${FIRST_AUTH_ACCOUNT}'..."
+    gcloud config set account "${FIRST_AUTH_ACCOUNT}" >/dev/null
+  else
+    error "No authenticated gcloud account found. Run 'gcloud auth login' and retry."
+  fi
+fi
+
+ACTIVE_ACCOUNT=$(gcloud config get-value account 2>/dev/null || true)
+info "Using account: ${ACTIVE_ACCOUNT}"
 
 ACTIVE_PROJECT=$(gcloud config get-value project 2>/dev/null)
 if [[ "${ACTIVE_PROJECT}" != "${PROJECT_ID}" ]]; then
   warn "Active project is '${ACTIVE_PROJECT}', switching to '${PROJECT_ID}'..."
   gcloud config set project "${PROJECT_ID}"
 fi
+
+info "Using project: ${PROJECT_NAME} (${PROJECT_ID})"
 
 info "Enabling required APIs..."
 gcloud services enable aiplatform.googleapis.com \
